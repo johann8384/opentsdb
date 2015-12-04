@@ -5,7 +5,7 @@
 
 Name:		@PACKAGE@
 Version:	%(echo @VERSION@ | sed 's/-/_/g')
-Release:	1
+Release:	5
 Summary:	A scalable, distributed Time Series Database
 Packager:	@PACKAGE_BUGREPORT@
 BuildArch:	noarch

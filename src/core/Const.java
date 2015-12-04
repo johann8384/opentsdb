@@ -19,7 +19,7 @@ public final class Const {
   public static final short TIMESTAMP_BYTES = 4;
 
   /** Maximum number of tags allowed per data point.  */
-  private static short MAX_NUM_TAGS = 8;
+  private static short MAX_NUM_TAGS = 16;
   public static short MAX_NUM_TAGS() {
     return MAX_NUM_TAGS;
   }
@@ -106,7 +106,7 @@ public final class Const {
    * queries as the salt calculation will differ. Scanning queries will be OK
    * though.
    */
-  private static int SALT_BUCKETS = 20;
+  private static int SALT_BUCKETS = 144;
   public static int SALT_BUCKETS() {
     return SALT_BUCKETS;
   }
@@ -137,7 +137,7 @@ public final class Const {
    * WARNING: Do NOT change this after you start writing data or you will not
    * be able to query for anything.
    */
-  private static int SALT_WIDTH = 0;
+  private static int SALT_WIDTH = 1;
   public static int SALT_WIDTH() {
     return SALT_WIDTH;
   }

@@ -34,6 +34,9 @@ import org.jboss.netty.channel.ExceptionEvent;
 import org.jboss.netty.channel.MessageEvent;
 import org.jboss.netty.channel.SimpleChannelUpstreamHandler;
 
+import javax.security.auth.login.LoginContext;
+import javax.security.auth.login.LoginException;
+
 /**
  * @since 2.3
  */
@@ -55,75 +58,24 @@ public class AuthenticationChannelHandler extends SimpleChannelUpstreamHandler {
 
   @Override
   public void messageReceived(ChannelHandlerContext ctx, MessageEvent authEvent) {
-    String authResponse = "AUTH_FAIL\r\n";
+    LoginContext lc = null;
+    String loginModule = tsdb.getConfig().getString("tsd.core.auth.login_module");
+
     try {
-      final Object authCommand = authEvent.getMessage();
-      if (authCommand instanceof String[]) {
-        LOG.debug("Passing auth command to Authentication Plugin");
-        if (handleTelnetAuth((String[]) authCommand)) {
-          LOG.debug("Authentication Completed");
-          authResponse = "AUTH_SUCCESS.\r\n";
-          ctx.getPipeline().remove(this);
-        }
-      } else if (authCommand instanceof HttpRequest) {
-        handleHTTPAuth((HttpRequest) authCommand);
-      } else {
-        LOG.error("Unexpected message type "
-                + authCommand.getClass() + ": " + authCommand);
-      }
+      EmbeddedCallbackHandler ec = new EmbeddedCallbackHandler(authEvent);
+      lc = new LoginContext(loginModule, ec);
+    } catch (LoginException le) {
+      LOG.error("Error during Login Context Setup: " + le);
+      return;
+    }
+
+    try {
+      lc.login();
+      ctx.getPipeline().remove(this);
     } catch (Exception e) {
-      LOG.error("Unexpected exception caught"
-              + " while serving: " + e);
-    } finally {
-      ChannelFuture future = authEvent.getChannel().write(authResponse);
+      LOG.error("Authentication Failed: " + e);
+      return;
     }
-  }
-
-  private Boolean handleTelnetAuth(String[] command) {
-    Boolean ret = false;
-    if (command.length  < 3 || command.length > 4) {
-      LOG.error("Invalid Authentication Command Length: " + Integer.toString(command.length));
-    } else if (command[0].equals("auth")) {
-      if (command[1].equals(AuthenticationUtil.algo.trim().toLowerCase())) {
-        // Command should be 'auth hmacsha256 accessKey:digest:epoch:nonce'
-        Map<String, String> fields = AuthenticationUtil.stringToMap(command[2], ":");
-        LOG.debug("Validating Digest Credentials");
-        ret = authentication.authenticate((String) fields.get("accessKey"), fields);
-      } else if (command[1].equals("basic")) {
-        // Command should be 'auth basic accessKey secretAccessKey'
-        LOG.debug("Validating Basic Credentials");
-        ret = authentication.authenticate(command[2], command[3]);
-      } else {
-        LOG.error("Command not understood: " + command[0] + " " + command[1]);
-      }
-    } else {
-      LOG.error("Command is not auth: " + command[0]);
-    }
-    return ret;
-  }
-
-
-  //Authorization: OpenTSDB accessKey:digest:epoch:nonce
-  private Boolean handleHTTPAuth(final HttpRequest req) {
-    Iterable<Map.Entry<String,String>> headers = req.headers();
-    Iterator entries = headers.iterator();
-    while (entries.hasNext()) {
-      Map.Entry thisEntry = (Map.Entry) entries.next();
-      String key = (String) thisEntry.getKey();
-      String value = (String) thisEntry.getValue();
-      if (key.trim().toLowerCase().equals("authorization")) {
-        String[] fieldsRaw = value.split(" ");
-        if (fieldsRaw.length == 2 && fieldsRaw[0].trim().toLowerCase().equals("opentsdb")) {
-          String[] fieldsArray = fieldsRaw[1].trim().toLowerCase().split(":");
-          Map<String, String> fields = AuthenticationUtil.stringToMap(fieldsRaw[1], ":");
-          LOG.debug("Validating Digest Credentials");
-          return authentication.authenticate((String) fields.get("accessKey"), fields);
-        } else {
-          throw new IllegalArgumentException("Improperly formatted Authorization Header: " + value);
-        }
-      }
-    }
-    LOG.info("No Authorization Header Found");
-    return false;
+    LOG.info("Authentication Completed");
   }
 }
